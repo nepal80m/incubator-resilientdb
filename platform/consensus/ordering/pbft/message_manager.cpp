@@ -136,6 +136,8 @@ bool MessageManager::MayConsensusChangeStatus(
     bool ret) {
   switch (type) {
     case Request::TYPE_PRE_PREPARE:
+      LOG(INFO) << "In MayConsensusChangeStatus TYPE_PRE_PREPARE";
+      LOG(INFO) << config_.GetSelfInfo().id();
       if (*status == TransactionStatue::None) {
         TransactionStatue old_status = TransactionStatue::None;
         return status->compare_exchange_strong(
@@ -144,6 +146,9 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_PREPARE:
+      LOG(INFO) << "In MayConsensusChangeStatus TYPE_PREPARE";
+      LOG(INFO) << config_.GetSelfInfo().id();
+
       if (*status == TransactionStatue::READY_PREPARE &&
           config_.GetMinDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_PREPARE;
@@ -153,6 +158,9 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_COMMIT:
+      LOG(INFO) << "In MayConsensusChangeStatus TYPE_COMMIT";
+      LOG(INFO) << config_.GetSelfInfo().id();
+
       if (*status == TransactionStatue::READY_COMMIT &&
           config_.GetMinDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_COMMIT;

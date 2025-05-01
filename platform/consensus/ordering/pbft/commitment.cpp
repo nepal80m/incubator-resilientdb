@@ -143,7 +143,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
 
   global_stats_->RecordStateTime("request");
 
-  user_request->set_type(Request::TYPE_PRE_PREPARE);
+  user_request->set_type(Request::TYPE_3PC_CAN_COMMIT);
   user_request->set_current_view(message_manager_->GetCurrentView());
   user_request->set_seq(*seq);
   user_request->set_sender_id(config_.GetSelfInfo().id());
@@ -219,17 +219,51 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
 
   global_stats_->IncPropose();
   global_stats_->RecordStateTime("pre-prepare");
-  std::unique_ptr<Request> prepare_request = resdb::NewRequest(
-      Request::TYPE_PREPARE, *request, config_.GetSelfInfo().id());
-  prepare_request->clear_data();
+  std::unique_ptr<Request> preprepare_request = resdb::NewRequest(
+      Request::TYPE_PRE_PREPARE, *request, config_.GetSelfInfo().id());
+  preprepare_request->clear_data();
 
   // Add request to message_manager.
   // If it has received enough same requests(2f+1), broadcast the prepare
   // message.
+  // CollectorResultCode ret =
+  // message_manager_->AddConsensusMsg(context->signature, std::move(request));
+  // if (ret == CollectorResultCode::STATE_CHANGED) {
+  // replica_communicator_->BroadCast(*prepare_request);
+  replica_communicator_->SendMessage(*preprepare_request,
+                                     message_manager_->GetCurrentPrimary());
+  // }
+  // return ret == CollectorResultCode::INVALID ? -2 : 0;
+  return 0;
+}
+
+int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
+                                       std::unique_ptr<Request> request) {
+  std::unique_ptr<Request> precommit_request = resdb::NewRequest(
+      Request::TYPE_3PC_PRECOMMIT, *request, config_.GetSelfInfo().id());
+  precommit_request->clear_data();
+
   CollectorResultCode ret =
       message_manager_->AddConsensusMsg(context->signature, std::move(request));
   if (ret == CollectorResultCode::STATE_CHANGED) {
-    replica_communicator_->BroadCast(*prepare_request);
+    replica_communicator_->BroadCast(*precommit_request);
+    // replica_communicator_->SendMessage(*preprepare_request,
+    //  message_manager_->GetCurrentPrimary());
+  }
+  return ret == CollectorResultCode::INVALID ? -2 : 0;
+  // return 0;
+}
+
+int Commitment::Process3PCBroadcastCommitMsg(std::unique_ptr<Context> context,
+                                             std::unique_ptr<Request> request) {
+  std::unique_ptr<Request> commit_request = resdb::NewRequest(
+      Request::TYPE_COMMIT, *request, config_.GetSelfInfo().id());
+  commit_request->mutable_data_signature()->Clear();
+  CollectorResultCode ret =
+      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+
+  if (ret == CollectorResultCode::STATE_CHANGED) {
+    replica_communicator_->BroadCast(*commit_request);
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
@@ -245,35 +279,40 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
     return message_manager_->AddConsensusMsg(context->signature,
                                              std::move(request));
   }
-  //global_stats_->IncPrepare();
-  std::unique_ptr<Request> commit_request = resdb::NewRequest(
-      Request::TYPE_COMMIT, *request, config_.GetSelfInfo().id());
-  commit_request->mutable_data_signature()->Clear();
+  // global_stats_->IncPrepare();
+  std::unique_ptr<Request> prepare_request = resdb::NewRequest(
+      Request::TYPE_PREPARE, *request, config_.GetSelfInfo().id());
+  prepare_request->mutable_data_signature()->Clear();
   // Add request to message_manager.
   // If it has received enough same requests(2f+1), broadcast the commit
   // message.
   uint64_t seq_ = request->seq();
-  CollectorResultCode ret =
-      message_manager_->AddConsensusMsg(context->signature, std::move(request));
-  if (ret == CollectorResultCode::STATE_CHANGED) {
-    if (message_manager_->GetHighestPreparedSeq() < seq_) {
-      message_manager_->SetHighestPreparedSeq(seq_);
-    }
-    // If need qc, sign the data
-    if (need_qc_ && verifier_) {
-      auto signature_or = verifier_->SignMessage(commit_request->hash());
-      if (!signature_or.ok()) {
-        LOG(ERROR) << "Sign message fail";
-        return -2;
-      }
-      *commit_request->mutable_data_signature() = *signature_or;
-      // LOG(ERROR) << "sign hash"
-      //           << commit_request->data_signature().DebugString();
-    }
-    global_stats_->RecordStateTime("prepare");
-    replica_communicator_->BroadCast(*commit_request);
+  // CollectorResultCode ret =
+  // message_manager_->AddConsensusMsg(context->signature,
+  // std::move(request));
+
+  // if (ret == CollectorResultCode::STATE_CHANGED) {
+  if (message_manager_->GetHighestPreparedSeq() < seq_) {
+    message_manager_->SetHighestPreparedSeq(seq_);
   }
-  return ret == CollectorResultCode::INVALID ? -2 : 0;
+  // If need qc, sign the data
+  if (need_qc_ && verifier_) {
+    auto signature_or = verifier_->SignMessage(prepare_request->hash());
+    if (!signature_or.ok()) {
+      LOG(ERROR) << "Sign message fail";
+      return -2;
+    }
+    *prepare_request->mutable_data_signature() = *signature_or;
+    // LOG(ERROR) << "sign hash"
+    //           << commit_request->data_signature().DebugString();
+  }
+  global_stats_->RecordStateTime("prepare");
+  // replica_communicator_->BroadCast(*commit_request);
+  replica_communicator_->SendMessage(*prepare_request,
+                                     message_manager_->GetCurrentPrimary());
+  // }
+  // return ret == CollectorResultCode::INVALID ? -2 : 0;
+  return 0;
 }
 
 // If receive 2f+1 commit message, commit the request.
@@ -288,25 +327,42 @@ int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
     return message_manager_->AddConsensusMsg(context->signature,
                                              std::move(request));
   }
-  //global_stats_->IncCommit();
-  // Add request to message_manager.
-  // If it has received enough same requests(2f+1), message manager will
-  // commit the request.
-  CollectorResultCode ret =
-      message_manager_->AddConsensusMsg(context->signature, std::move(request));
-  if (ret == CollectorResultCode::STATE_CHANGED) {
-    // LOG(ERROR)<<request->data().size();
-    // global_stats_->GetTransactionDetails(request->data());
-    global_stats_->RecordStateTime("commit");
-  }
-  return ret == CollectorResultCode::INVALID ? -2 : 0;
+
+  // Send response back to client regardless of consensus state
+  Request response_request;
+  response_request.set_type(Request::TYPE_RESPONSE);
+  response_request.set_sender_id(config_.GetSelfInfo().id());
+  response_request.set_proxy_id(request->proxy_id());
+  response_request.set_hash(request->hash());
+  response_request.set_seq(request->seq());
+  response_request.set_current_view(request->current_view());
+  response_request.set_primary_id(request->primary_id());
+
+  // Create a batch response
+  BatchUserResponse batch_response;
+  batch_response.set_createtime(GetCurrentTime());
+  batch_response.set_hash(request->hash());
+  batch_response.set_proxy_id(request->proxy_id());
+  batch_response.set_seq(request->seq());
+  batch_response.set_current_view(request->current_view());
+  batch_response.set_primary_id(request->primary_id());
+
+  // Serialize and send response
+  batch_response.SerializeToString(response_request.mutable_data());
+  replica_communicator_->SendMessage(response_request,
+                                     response_request.proxy_id());
+
+  global_stats_->RecordStateTime("commit");
+  return 0;
 }
 
 // =========== private threads ===========================
 // If the transaction is executed, send back to the proxy.
 int Commitment::PostProcessExecutedMsg() {
+  LOG(INFO) << "PostProcessExecutedMsg thread started";
   while (!stop_) {
     auto batch_resp = message_manager_->GetResponseMsg();
+    LOG(INFO) << "PostProcessExecutedMsg: Got batch resp";
     if (batch_resp == nullptr) {
       continue;
     }
@@ -319,7 +375,7 @@ int Commitment::PostProcessExecutedMsg() {
     request.set_current_view(batch_resp->current_view());
     request.set_proxy_id(batch_resp->proxy_id());
     request.set_primary_id(batch_resp->primary_id());
-    // LOG(ERROR)<<"send back to proxy:"<<batch_resp->proxy_id();
+    LOG(ERROR) << "send back to proxy:" << batch_resp->proxy_id();
     batch_resp->SerializeToString(request.mutable_data());
     replica_communicator_->SendMessage(request, request.proxy_id());
   }

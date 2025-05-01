@@ -200,6 +200,7 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
         return performance_manager_->ProcessResponseMsg(std::move(context),
                                                         std::move(request));
       }
+
       return response_manager_->ProcessResponseMsg(std::move(context),
                                                    std::move(request));
     case Request::TYPE_NEW_TXNS: {
@@ -224,13 +225,26 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
       }
       return ret;
     }
-    case Request::TYPE_PRE_PREPARE:
+    case Request::TYPE_3PC_CAN_COMMIT: {
       return commitment_->ProcessProposeMsg(std::move(context),
                                             std::move(request));
-    case Request::TYPE_PREPARE:
+    }
+    case Request::TYPE_PRE_PREPARE: {
+      return commitment_->Process3PCPreCommitMsg(std::move(context),
+                                                 std::move(request));
+    }
+
+    case Request::TYPE_3PC_PRECOMMIT:
       return commitment_->ProcessPrepareMsg(std::move(context),
                                             std::move(request));
+
+    case Request::TYPE_PREPARE: {
+      // TODO: New function
+      return commitment_->Process3PCBroadcastCommitMsg(std::move(context),
+                                                       std::move(request));
+    }
     case Request::TYPE_COMMIT:
+      LOG(ERROR) << "HERERE: Got to TYPE_COMMIT";
       return commitment_->ProcessCommitMsg(std::move(context),
                                            std::move(request));
     case Request::TYPE_CHECKPOINT:

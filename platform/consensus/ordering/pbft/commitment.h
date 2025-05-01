@@ -45,7 +45,10 @@ class Commitment {
                                 std::unique_ptr<Request> request);
   virtual int ProcessCommitMsg(std::unique_ptr<Context> context,
                                std::unique_ptr<Request> request);
-
+  virtual int Process3PCPreCommitMsg(std::unique_ptr<Context> context,
+                                     std::unique_ptr<Request> request);
+  virtual int Process3PCBroadcastCommitMsg(std::unique_ptr<Context> context,
+                                           std::unique_ptr<Request> request);
   void SetPreVerifyFunc(std::function<bool(const Request& request)> func);
   void SetNeedCommitQC(bool need_qc);
 
