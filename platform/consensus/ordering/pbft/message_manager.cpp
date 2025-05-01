@@ -133,11 +133,9 @@ bool MessageManager::IsValidMsg(const Request& request) {
 
 bool MessageManager::MayConsensusChangeStatus(
     int type, int received_count, std::atomic<TransactionStatue>* status,
-    bool ret) {
+    bool ret, bool primary) {
   switch (type) {
     case Request::TYPE_PRE_PREPARE:
-      LOG(INFO) << "In MayConsensusChangeStatus TYPE_PRE_PREPARE";
-      LOG(INFO) << config_.GetSelfInfo().id();
       if (*status == TransactionStatue::None) {
         TransactionStatue old_status = TransactionStatue::None;
         return status->compare_exchange_strong(
@@ -146,11 +144,10 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_PREPARE:
-      LOG(INFO) << "In MayConsensusChangeStatus TYPE_PREPARE";
-      LOG(INFO) << config_.GetSelfInfo().id();
 
-      if (*status == TransactionStatue::READY_PREPARE &&
-          config_.GetMinDataReceiveNum() <= received_count) {
+      if ((*status == TransactionStatue::READY_PREPARE &&
+          config_.GetMinDataReceiveNum() <= received_count) ||
+        (*status == TransactionStatue::READY_PREPARE || !primary)) {
         TransactionStatue old_status = TransactionStatue::READY_PREPARE;
         return status->compare_exchange_strong(
             old_status, TransactionStatue::READY_COMMIT,
@@ -158,11 +155,8 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_COMMIT:
-      LOG(INFO) << "In MayConsensusChangeStatus TYPE_COMMIT";
-      LOG(INFO) << config_.GetSelfInfo().id();
 
-      if (*status == TransactionStatue::READY_COMMIT &&
-          config_.GetMinDataReceiveNum() <= received_count) {
+      if (*status == TransactionStatue::READY_COMMIT) {
         TransactionStatue old_status = TransactionStatue::READY_COMMIT;
         return status->compare_exchange_strong(
             old_status, TransactionStatue::READY_EXECUTE,
@@ -181,7 +175,7 @@ bool MessageManager::MayConsensusChangeStatus(
 // If there are enough messages and the state is changed after adding the
 // message, return 1, otherwise return 0. Return -2 if the request is not valid.
 CollectorResultCode MessageManager::AddConsensusMsg(
-    const SignatureInfo& signature, std::unique_ptr<Request> request) {
+    const SignatureInfo& signature, std::unique_ptr<Request> request, bool primary) {
   if (request == nullptr || !IsValidMsg(*request)) {
     return CollectorResultCode::INVALID;
   }
@@ -195,7 +189,7 @@ CollectorResultCode MessageManager::AddConsensusMsg(
       [&](const Request& request, int received_count,
           TransactionCollector::CollectorDataType* data,
           std::atomic<TransactionStatue>* status, bool force) {
-        if (MayConsensusChangeStatus(type, received_count, status, force)) {
+        if (MayConsensusChangeStatus(type, received_count, status, force, primary)) {
           resp_received_count = 1;
         }
       });

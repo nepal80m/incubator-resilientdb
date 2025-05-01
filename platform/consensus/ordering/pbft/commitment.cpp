@@ -174,7 +174,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
       return 0;
     }
     return message_manager_->AddConsensusMsg(context->signature,
-                                             std::move(request));
+                                             std::move(request), false);
   }
 
   if (request->sender_id() != message_manager_->GetCurrentPrimary()) {
@@ -226,8 +226,10 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
   // Add request to message_manager.
   // If it has received enough same requests(2f+1), broadcast the prepare
   // message.
-  // CollectorResultCode ret =
-  // message_manager_->AddConsensusMsg(context->signature, std::move(request));
+  if (config_.GetSelfInfo().id() != message_manager_->GetCurrentPrimary()) {
+    CollectorResultCode ret = message_manager_->AddConsensusMsg(context->signature, std::move(preprepare_request), false);
+    global_stats_->RecordStateTime("pre-prepare");
+  }
   // if (ret == CollectorResultCode::STATE_CHANGED) {
   // replica_communicator_->BroadCast(*prepare_request);
   replica_communicator_->SendMessage(*preprepare_request,
@@ -244,8 +246,9 @@ int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
   precommit_request->clear_data();
 
   CollectorResultCode ret =
-      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+      message_manager_->AddConsensusMsg(context->signature, std::move(request), true);
   if (ret == CollectorResultCode::STATE_CHANGED) {
+    global_stats_->RecordStateTime("pre-prepare");
     replica_communicator_->BroadCast(*precommit_request);
     // replica_communicator_->SendMessage(*preprepare_request,
     //  message_manager_->GetCurrentPrimary());
@@ -260,9 +263,10 @@ int Commitment::Process3PCBroadcastCommitMsg(std::unique_ptr<Context> context,
       Request::TYPE_COMMIT, *request, config_.GetSelfInfo().id());
   commit_request->mutable_data_signature()->Clear();
   CollectorResultCode ret =
-      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+      message_manager_->AddConsensusMsg(context->signature, std::move(request), true);
 
   if (ret == CollectorResultCode::STATE_CHANGED) {
+    global_stats_->RecordStateTime("prepare");
     replica_communicator_->BroadCast(*commit_request);
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
@@ -277,7 +281,7 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
   }
   if (request->is_recovery()) {
     return message_manager_->AddConsensusMsg(context->signature,
-                                             std::move(request));
+                                             std::move(request), false);
   }
   // global_stats_->IncPrepare();
   std::unique_ptr<Request> prepare_request = resdb::NewRequest(
@@ -306,7 +310,10 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
     // LOG(ERROR) << "sign hash"
     //           << commit_request->data_signature().DebugString();
   }
-  global_stats_->RecordStateTime("prepare");
+  if (config_.GetSelfInfo().id() != message_manager_->GetCurrentPrimary()) {
+    CollectorResultCode ret = message_manager_->AddConsensusMsg(context->signature, std::move(prepare_request), false);
+    global_stats_->RecordStateTime("prepare");
+  }
   // replica_communicator_->BroadCast(*commit_request);
   replica_communicator_->SendMessage(*prepare_request,
                                      message_manager_->GetCurrentPrimary());
@@ -323,37 +330,14 @@ int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
                << " context:" << (context == nullptr);
     return -2;
   }
-  if (request->is_recovery()) {
-    return message_manager_->AddConsensusMsg(context->signature,
-                                             std::move(request));
+  CollectorResultCode ret =
+      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+  if (ret == CollectorResultCode::STATE_CHANGED) {
+    // LOG(ERROR)<<request->data().size();
+    // global_stats_->GetTransactionDetails(request->data());
+    global_stats_->RecordStateTime("commit");
   }
-
-  // Send response back to client regardless of consensus state
-  Request response_request;
-  response_request.set_type(Request::TYPE_RESPONSE);
-  response_request.set_sender_id(config_.GetSelfInfo().id());
-  response_request.set_proxy_id(request->proxy_id());
-  response_request.set_hash(request->hash());
-  response_request.set_seq(request->seq());
-  response_request.set_current_view(request->current_view());
-  response_request.set_primary_id(request->primary_id());
-
-  // Create a batch response
-  BatchUserResponse batch_response;
-  batch_response.set_createtime(GetCurrentTime());
-  batch_response.set_hash(request->hash());
-  batch_response.set_proxy_id(request->proxy_id());
-  batch_response.set_seq(request->seq());
-  batch_response.set_current_view(request->current_view());
-  batch_response.set_primary_id(request->primary_id());
-
-  // Serialize and send response
-  batch_response.SerializeToString(response_request.mutable_data());
-  replica_communicator_->SendMessage(response_request,
-                                     response_request.proxy_id());
-
-  global_stats_->RecordStateTime("commit");
-  return 0;
+  return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
 
 // =========== private threads ===========================

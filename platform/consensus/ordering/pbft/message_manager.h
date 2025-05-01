@@ -64,7 +64,7 @@ class MessageManager {
   // message, return 1, otherwise return 0. Return -2 if the request is not
   // valid.
   CollectorResultCode AddConsensusMsg(const SignatureInfo& signature,
-                                      std::unique_ptr<Request> request);
+                                      std::unique_ptr<Request> request, bool primary);
 
   // Obtain the request that has been executed from Executor.
   // The messages that have been executed from Executor will save inside
@@ -117,7 +117,7 @@ class MessageManager {
 
   bool MayConsensusChangeStatus(int type, int received_count,
                                 std::atomic<TransactionStatue>* status,
-                                bool force);
+                                bool force, bool primary);
 
  private:
   ResDBConfig config_;
