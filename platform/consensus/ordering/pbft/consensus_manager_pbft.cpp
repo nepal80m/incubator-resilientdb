@@ -224,6 +224,27 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
       }
       return ret;
     }
+
+    case Request::TYPE_3PC_VOTE_REQUEST:
+      return commitment_->Process3PCVoteRequestMsg(std::move(context),
+                                                   std::move(request));
+
+    case Request::TYPE_3PC_VOTE_YES:
+      return commitment_->Process3PCVoteYesMsg(std::move(context),
+                                               std::move(request));
+    case Request::TYPE_3PC_PRE_COMMIT:
+      return commitment_->Process3PCPreCommitMsg(std::move(context),
+                                                 std::move(request));
+    case Request::TYPE_3PC_PRE_COMMIT_ACK:
+      return commitment_->Process3PCPreCommitAckMsg(std::move(context),
+                                                    std::move(request));
+    case Request::TYPE_3PC_COMMIT:
+      return commitment_->Process3PCCommitMsg(std::move(context),
+                                              std::move(request));
+    case Request::TYPE_3PC_COMMIT_ACK:
+      return commitment_->Process3PCCommitAckMsg(std::move(context),
+                                                 std::move(request));
+
     case Request::TYPE_PRE_PREPARE:
       return commitment_->ProcessProposeMsg(std::move(context),
                                             std::move(request));

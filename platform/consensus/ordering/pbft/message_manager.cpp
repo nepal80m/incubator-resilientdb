@@ -131,6 +131,19 @@ bool MessageManager::IsValidMsg(const Request& request) {
   return true;
 }
 
+// bool MessageManager::MayConsensusChangeStatusMod(
+//     int type, int received_count, std::atomic<TransactionStatue>* status,
+//     bool ret) {
+//   if (*status == TransactionStatue::READY_COMMIT &&
+//       config_.GetMinDataReceiveNum() <= received_count) {
+//     TransactionStatue old_status = TransactionStatue::READY_COMMIT;
+//     return status->compare_exchange_strong(
+//         old_status, TransactionStatue::READY_EXECUTE,
+//         std::memory_order_acq_rel, std::memory_order_acq_rel);
+//     return true;
+//   }
+// }
+
 bool MessageManager::MayConsensusChangeStatus(
     int type, int received_count, std::atomic<TransactionStatue>* status,
     bool ret) {
@@ -172,17 +185,47 @@ bool MessageManager::MayConsensusChangeStatus(
 
 // If there are enough messages and the state is changed after adding the
 // message, return 1, otherwise return 0. Return -2 if the request is not valid.
+
+CollectorResultCode MessageManager::AddConsensusMsgMod(
+    const SignatureInfo& signature, std::unique_ptr<Request> request) {
+  // Extract infromation from the request.
+  int type = request->type();
+  LOG(INFO) << "Getting seq number";
+
+  uint64_t seq = request->seq();
+  LOG(INFO) << "Got seq number" << seq;
+
+  LOG(INFO) << "Adding request to collector pool";
+  collector_pool_->GetCollector(seq)->AddRequestMod(std::move(request));
+  return CollectorResultCode::OK;
+}
+
 CollectorResultCode MessageManager::AddConsensusMsg(
     const SignatureInfo& signature, std::unique_ptr<Request> request) {
+  // check if request is valid.
   if (request == nullptr || !IsValidMsg(*request)) {
     return CollectorResultCode::INVALID;
   }
+  // Extract infromation from the request.
   int type = request->type();
   uint64_t seq = request->seq();
   int resp_received_count = 0;
   int proxy_id = request->proxy_id();
 
+  // Add request to the collector pool.
+  // Gets the appropriate collector based on the sequence number.
+  // Adds the request to the collector.
+  // Provides a callback that:
+  // - Checks if the consensus status may change based on message type and
+  // count.
+  // - Sets resp_received_count if the status changes.
+
+  // AddRequest : If main_request is true (TYPE_PRE_PREPARE), does some voodoo,
+  // then calls callback with count 1, force true.
+  // otherwise calls callback with current count, force false.
+  // if READY_EXECUTE, additionally calls Commit()
   int ret = collector_pool_->GetCollector(seq)->AddRequest(
+      // std::move(request), signature, type == Request::TYPE_3PC_VOTE_REQUEST,
       std::move(request), signature, type == Request::TYPE_PRE_PREPARE,
       [&](const Request& request, int received_count,
           TransactionCollector::CollectorDataType* data,

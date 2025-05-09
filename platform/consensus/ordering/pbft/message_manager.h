@@ -65,6 +65,8 @@ class MessageManager {
   // valid.
   CollectorResultCode AddConsensusMsg(const SignatureInfo& signature,
                                       std::unique_ptr<Request> request);
+  CollectorResultCode AddConsensusMsgMod(const SignatureInfo& signature,
+                                         std::unique_ptr<Request> request);
 
   // Obtain the request that has been executed from Executor.
   // The messages that have been executed from Executor will save inside

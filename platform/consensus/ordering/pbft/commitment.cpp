@@ -66,11 +66,13 @@ void Commitment::SetNeedCommitQC(bool need_qc) { need_qc_ = need_qc; }
 // TODO if not a primary, redicet to the primary replica.
 int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
                                   std::unique_ptr<Request> user_request) {
+  // Verify the request has a valid signature.
   if (context == nullptr || context->signature.signature().empty()) {
     LOG(ERROR) << "user request doesn't contain signature, reject";
     return -2;
   }
 
+  // Check if request was already executed previously
   if (uint64_t seq =
           duplicate_manager_->CheckIfExecuted(user_request->hash())) {
     LOG(ERROR) << "This request is already executed with seq: " << seq;
@@ -78,7 +80,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     message_manager_->SendResponse(std::move(user_request));
     return -2;
   }
-
+  // Check if this node is the primary replica.
   if (config_.GetSelfInfo().id() != message_manager_->GetCurrentPrimary()) {
     // LOG(ERROR) << "current node is not primary. primary:"
     //            << message_manager_->GetCurrentPrimary()
@@ -86,6 +88,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     //            << " hash:" << user_request->hash();
     LOG(INFO) << "NOT PRIMARY, Primary is "
               << message_manager_->GetCurrentPrimary();
+    // Forward request to the primary.
     replica_communicator_->SendMessage(*user_request,
                                        message_manager_->GetCurrentPrimary());
     {
@@ -113,21 +116,26 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     LOG(ERROR) << " msg:" << user_request->data().size();
     return -2;
   }
-
+  // Run custom verificatin if provided
   if (pre_verify_func_ && !pre_verify_func_(*user_request)) {
     LOG(ERROR) << " check by the user func fail";
     return -2;
   }
 
+  // Track statistics
   global_stats_->IncClientRequest();
+
+  // Check for duplicate proposal
   if (duplicate_manager_->CheckAndAddProposed(user_request->hash())) {
     return -2;
   }
+  // Assign sequence number to the request
   auto seq = message_manager_->AssignNextSeq();
 
   // Artificially make the primary stop proposing new trasactions.
 
   if (!seq.ok()) {
+    // Cleanup if sequence assignment fails
     duplicate_manager_->EraseProposed(user_request->hash());
     global_stats_->SeqFail();
     Request request;
@@ -143,14 +151,99 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
 
   global_stats_->RecordStateTime("request");
 
-  user_request->set_type(Request::TYPE_PRE_PREPARE);
+  // Convert user request to pre-prepare message
+  // New: Convert user request to vote request message
+  // user_request->set_type(Request::TYPE_PRE_PREPARE);
+  user_request->set_type(Request::TYPE_3PC_VOTE_REQUEST);
+
   user_request->set_current_view(message_manager_->GetCurrentView());
   user_request->set_seq(*seq);
   user_request->set_sender_id(config_.GetSelfInfo().id());
   user_request->set_primary_id(config_.GetSelfInfo().id());
 
+  // Broadcast pre-prepare message to all replicas
   replica_communicator_->BroadCast(*user_request);
 
+  return 0;
+}
+
+int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
+                                         std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCVoteRequestMsg";
+
+  // Create a new prepare message based on received request.
+  std::unique_ptr<Request> vote_yes_request = resdb::NewRequest(
+      Request::TYPE_3PC_VOTE_YES, *request, config_.GetSelfInfo().id());
+  vote_yes_request->clear_data();
+
+  // -----
+  // Pretend to be of message type TYPE_PRE_PREPARE and add to message_manager.
+  // purpose is to change the state from TransactionStatue::None to
+  // TransactionStatue::READY_PREPARE
+
+  LOG(INFO) << "Before setting type TYPE_PRE_PREPARE";
+  request->set_type(Request::TYPE_PRE_PREPARE);
+  LOG(INFO) << "After setting type TYPE_PRE_PREPARE";
+
+  LOG(INFO) << "Before Adding to consensus";
+  CollectorResultCode ret =
+      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+  LOG(INFO) << "After Adding to consensus";
+  if (ret == CollectorResultCode::STATE_CHANGED) {
+    LOG(INFO) << "Status changed, broadcasting request";
+    replica_communicator_->BroadCast(*vote_yes_request);
+    LOG(INFO) << "broadcasting done";
+  }
+  // return ret == CollectorResultCode::INVALID ? -2 : 0;
+  // LOG(INFO) << "Adding to consensus";
+  // message_manager_->AddConsensusMsgMod(context->signature,
+  // std::move(request));
+  // -----
+
+  // if (ret == CollectorResultCode::STATE_CHANGED) {
+  //   LOG(ERROR) << "BEFORE SENDING MESSAGE";
+  //   replica_communicator_->SendMessage(*vote_yes_request,
+  //                                      request->primary_id());
+  //   LOG(ERROR) << "AFTER SENDING MESSAGE";
+  // }
+  // LOG(ERROR) << "CHECKING SEQ";
+  // message_manager_->collector_pool_->
+  // uint64_t seq = request->seq();
+  // LOG(ERROR) << "GOT SEQ:" << seq;
+  // message_manager_->collector_pool_->GetCollector(seq)->Commit();
+  // return ret == CollectorResultCode::INVALID ? -2 : 0;
+  return 0;
+}
+
+int Commitment::Process3PCVoteYesMsg(std::unique_ptr<Context> context,
+                                     std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCVoteYesMsg";
+  // std::unique_ptr<Request> vote_yes_request = resdb::NewRequest(
+  //     Request::TYPE_3PC_VOTE_YES, *request, config_.GetSelfInfo().id());
+  // vote_yes_request->clear_data();
+
+  // replica_communicator_->BroadCast(*vote_yes_request);
+  message_manager_->AddConsensusMsgMod(context->signature, std::move(request));
+  return 0;
+}
+int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
+                                       std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCPreCommitMsg";
+  return 0;
+}
+int Commitment::Process3PCPreCommitAckMsg(std::unique_ptr<Context> context,
+                                          std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCPreCommitAckMsg";
+  return 0;
+}
+int Commitment::Process3PCCommitMsg(std::unique_ptr<Context> context,
+                                    std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCCommitMsg";
+  return 0;
+}
+int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,
+                                       std::unique_ptr<Request> request) {
+  LOG(INFO) << "Inside Process3PCCommitAckMsg";
   return 0;
 }
 
@@ -158,11 +251,15 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
 // TODO check whether the sender is the primary.
 int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
                                   std::unique_ptr<Request> request) {
+  // Check if node is in faulty state or if the request lacks proper
+  // context/signature.
   if (global_stats_->IsFaulty() || context == nullptr ||
       context->signature.signature().empty()) {
     LOG(ERROR) << "user request doesn't contain signature, reject";
     return -2;
   }
+
+  // Special handling for recovery requests, updating sequence number if needed.
   if (request->is_recovery()) {
     if (message_manager_->GetNextSeq() == 0 ||
         request->seq() == message_manager_->GetNextSeq()) {
@@ -176,7 +273,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
     return message_manager_->AddConsensusMsg(context->signature,
                                              std::move(request));
   }
-
+  // Verify the request is from the primary.
   if (request->sender_id() != message_manager_->GetCurrentPrimary()) {
     LOG(ERROR) << "the request is not from primary. sender:"
                << request->sender_id() << " seq:" << request->seq();
@@ -191,6 +288,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
     }
     */
 
+  // Additional validations for requestts from other nodes.
   if (request->sender_id() != config_.GetSelfInfo().id()) {
     if (pre_verify_func_ && !pre_verify_func_(*request)) {
       LOG(ERROR) << " check by the user func fail";
@@ -217,8 +315,11 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
     }
   }
 
+  // Increase the propose count and record the time for the pre-prepare state.
   global_stats_->IncPropose();
   global_stats_->RecordStateTime("pre-prepare");
+
+  // Create a new prepare message based on received request.
   std::unique_ptr<Request> prepare_request = resdb::NewRequest(
       Request::TYPE_PREPARE, *request, config_.GetSelfInfo().id());
   prepare_request->clear_data();
@@ -226,6 +327,9 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
   // Add request to message_manager.
   // If it has received enough same requests(2f+1), broadcast the prepare
   // message.
+  // Asim: doesnt actually require 2f+1 messages to be received. purpose is to
+  // change the state from TransactionStatue::None to
+  // TransactionStatue::READY_PREPARE
   CollectorResultCode ret =
       message_manager_->AddConsensusMsg(context->signature, std::move(request));
   if (ret == CollectorResultCode::STATE_CHANGED) {
@@ -245,7 +349,7 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
     return message_manager_->AddConsensusMsg(context->signature,
                                              std::move(request));
   }
-  //global_stats_->IncPrepare();
+  // global_stats_->IncPrepare();
   std::unique_ptr<Request> commit_request = resdb::NewRequest(
       Request::TYPE_COMMIT, *request, config_.GetSelfInfo().id());
   commit_request->mutable_data_signature()->Clear();
@@ -288,10 +392,10 @@ int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
     return message_manager_->AddConsensusMsg(context->signature,
                                              std::move(request));
   }
-  //global_stats_->IncCommit();
-  // Add request to message_manager.
-  // If it has received enough same requests(2f+1), message manager will
-  // commit the request.
+  // global_stats_->IncCommit();
+  //  Add request to message_manager.
+  //  If it has received enough same requests(2f+1), message manager will
+  //  commit the request.
   CollectorResultCode ret =
       message_manager_->AddConsensusMsg(context->signature, std::move(request));
   if (ret == CollectorResultCode::STATE_CHANGED) {

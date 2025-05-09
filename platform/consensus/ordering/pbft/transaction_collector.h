@@ -99,6 +99,7 @@ class TransactionCollector {
 
   // Add a message and count by its hash value.
   // After it is done call_back will be triggered.
+  int AddRequestMod(std::unique_ptr<Request> request);
   int AddRequest(
       std::unique_ptr<Request> request, const SignatureInfo& signature,
       bool is_main_request,

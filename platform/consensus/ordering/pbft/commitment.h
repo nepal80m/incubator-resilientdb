@@ -39,6 +39,19 @@ class Commitment {
   virtual int ProcessNewRequest(std::unique_ptr<Context> context,
                                 std::unique_ptr<Request> user_request);
 
+  virtual int Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
+                                       std::unique_ptr<Request> request);
+  virtual int Process3PCVoteYesMsg(std::unique_ptr<Context> context,
+                                   std::unique_ptr<Request> request);
+  virtual int Process3PCPreCommitMsg(std::unique_ptr<Context> context,
+                                     std::unique_ptr<Request> request);
+  virtual int Process3PCPreCommitAckMsg(std::unique_ptr<Context> context,
+                                        std::unique_ptr<Request> request);
+  virtual int Process3PCCommitMsg(std::unique_ptr<Context> context,
+                                  std::unique_ptr<Request> request);
+  virtual int Process3PCCommitAckMsg(std::unique_ptr<Context> context,
+                                     std::unique_ptr<Request> request);
+
   virtual int ProcessProposeMsg(std::unique_ptr<Context> context,
                                 std::unique_ptr<Request> request);
   virtual int ProcessPrepareMsg(std::unique_ptr<Context> context,

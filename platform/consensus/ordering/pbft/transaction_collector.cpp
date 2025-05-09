@@ -66,12 +66,41 @@ std::vector<RequestInfo> TransactionCollector::GetPreparedProof() {
   return prepared_info;
 }
 
+int TransactionCollector::AddRequestMod(std::unique_ptr<Request> request) {
+  LOG(INFO) << "Reached AddRequestMod";
+  TransactionStatue old_status = TransactionStatue::READY_PREPARE;
+  LOG(INFO) << "Changing Statue";
+  bool res = status_.compare_exchange_strong(
+      old_status, TransactionStatue::READY_EXECUTE, std::memory_order_acq_rel,
+      std::memory_order_acq_rel);
+  if (!res) {
+    LOG(ERROR) << "Failed to change statue";
+    return -2;
+  }
+  if (status_.load() == TransactionStatue::READY_EXECUTE) {
+    LOG(INFO) << "Status is READY_EXECUTE";
+  } else {
+    LOG(ERROR) << "Status is not READY_EXECUTE";
+  }
+
+  LOG(INFO) << "Changed Statue to " << status_.load();
+
+  LOG(INFO) << "Before Calling Commit()";
+  Commit();
+  LOG(INFO) << "After Calling Commit()";
+  return 0;
+}
+
 int TransactionCollector::AddRequest(
     std::unique_ptr<Request> request, const SignatureInfo& signature,
     bool is_main_request,
     std::function<void(const Request&, int received_count, CollectorDataType*,
                        std::atomic<TransactionStatue>* status, bool force)>
         call_back) {
+  // If main_request is true (TYPE_PRE_PREPARE), does some voodoo, then calls
+  // callback with count 1, force true.
+  // otherwise calls callback with current count, force false.
+  // if READY_EXECUTE, additionally calls Commit()
   if (request == nullptr) {
     LOG(ERROR) << "request empty";
     return -2;
