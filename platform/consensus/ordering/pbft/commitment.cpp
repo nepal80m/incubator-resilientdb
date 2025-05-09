@@ -181,64 +181,74 @@ int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
   // purpose is to change the state from TransactionStatue::None to
   // TransactionStatue::READY_PREPARE
 
-  LOG(INFO) << "Before setting type TYPE_PRE_PREPARE";
   request->set_type(Request::TYPE_PRE_PREPARE);
-  LOG(INFO) << "After setting type TYPE_PRE_PREPARE";
 
-  LOG(INFO) << "Before Adding to consensus";
   CollectorResultCode ret =
       message_manager_->AddConsensusMsg(context->signature, std::move(request));
-  LOG(INFO) << "After Adding to consensus";
   if (ret == CollectorResultCode::STATE_CHANGED) {
-    LOG(INFO) << "Status changed, broadcasting request";
-    replica_communicator_->BroadCast(*vote_yes_request);
-    LOG(INFO) << "broadcasting done";
+    // replica_communicator_->BroadCast(*vote_yes_request);
+    replica_communicator_->SendMessage(*vote_yes_request,
+                                       message_manager_->GetCurrentPrimary());
   }
-  // return ret == CollectorResultCode::INVALID ? -2 : 0;
-  // LOG(INFO) << "Adding to consensus";
+
   // message_manager_->AddConsensusMsgMod(context->signature,
   // std::move(request));
   // -----
-
-  // if (ret == CollectorResultCode::STATE_CHANGED) {
-  //   LOG(ERROR) << "BEFORE SENDING MESSAGE";
-  //   replica_communicator_->SendMessage(*vote_yes_request,
-  //                                      request->primary_id());
-  //   LOG(ERROR) << "AFTER SENDING MESSAGE";
-  // }
-  // LOG(ERROR) << "CHECKING SEQ";
-  // message_manager_->collector_pool_->
-  // uint64_t seq = request->seq();
-  // LOG(ERROR) << "GOT SEQ:" << seq;
-  // message_manager_->collector_pool_->GetCollector(seq)->Commit();
-  // return ret == CollectorResultCode::INVALID ? -2 : 0;
   return 0;
 }
 
 int Commitment::Process3PCVoteYesMsg(std::unique_ptr<Context> context,
                                      std::unique_ptr<Request> request) {
   LOG(INFO) << "Inside Process3PCVoteYesMsg";
-  // std::unique_ptr<Request> vote_yes_request = resdb::NewRequest(
-  //     Request::TYPE_3PC_VOTE_YES, *request, config_.GetSelfInfo().id());
-  // vote_yes_request->clear_data();
+  std::unique_ptr<Request> pre_commit_request = resdb::NewRequest(
+      Request::TYPE_3PC_PRE_COMMIT, *request, config_.GetSelfInfo().id());
+  pre_commit_request->clear_data();
 
-  // replica_communicator_->BroadCast(*vote_yes_request);
-  message_manager_->AddConsensusMsgMod(context->signature, std::move(request));
-  return 0;
+  CollectorResultCode ret =
+      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+
+  if (ret == CollectorResultCode::STATE_CHANGED) {
+    replica_communicator_->BroadCast(*pre_commit_request);
+  }
+  return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
+
 int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
                                        std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside Process3PCPreCommitMsg";
+  std::unique_ptr<Request> precommit_ack_request = resdb::NewRequest(
+      Request::TYPE_3PC_PRE_COMMIT_ACK, *request, config_.GetSelfInfo().id());
+  precommit_ack_request->clear_data();
+
+  replica_communicator_->SendMessage(*precommit_ack_request,
+                                     message_manager_->GetCurrentPrimary());
+
   return 0;
 }
+
 int Commitment::Process3PCPreCommitAckMsg(std::unique_ptr<Context> context,
                                           std::unique_ptr<Request> request) {
   LOG(INFO) << "Inside Process3PCPreCommitAckMsg";
-  return 0;
+  std::unique_ptr<Request> commit_request = resdb::NewRequest(
+      Request::TYPE_3PC_COMMIT, *request, config_.GetSelfInfo().id());
+  commit_request->clear_data();
+
+  CollectorResultCode ret =
+      message_manager_->AddConsensusMsg(context->signature, std::move(request));
+
+  if (ret == CollectorResultCode::STATE_CHANGED) {
+    LOG(INFO) << "consensus reached";
+    replica_communicator_->BroadCast(*commit_request);
+  } else {
+    LOG(INFO) << "consensus not reached";
+  }
+  return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
+
 int Commitment::Process3PCCommitMsg(std::unique_ptr<Context> context,
                                     std::unique_ptr<Request> request) {
   LOG(INFO) << "Inside Process3PCCommitMsg";
+  message_manager_->AddConsensusMsg(context->signature, std::move(request));
+
   return 0;
 }
 int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,

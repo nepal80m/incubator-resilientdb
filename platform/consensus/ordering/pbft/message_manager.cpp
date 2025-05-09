@@ -175,6 +175,27 @@ bool MessageManager::MayConsensusChangeStatus(
         return true;
       }
       break;
+    case Request::TYPE_3PC_VOTE_YES:
+      if (*status == TransactionStatue::READY_PREPARE &&
+          config_.GetReplicaNum() <= received_count) {
+        return true;
+      }
+      break;
+    case Request::TYPE_3PC_PRE_COMMIT_ACK:
+      if (*status == TransactionStatue::READY_PREPARE &&
+          config_.GetReplicaNum() <= received_count) {
+        return true;
+      }
+      break;
+    case Request::TYPE_3PC_COMMIT:
+      if (*status == TransactionStatue::READY_PREPARE) {
+        TransactionStatue old_status = TransactionStatue::READY_PREPARE;
+        return status->compare_exchange_strong(
+            old_status, TransactionStatue::READY_EXECUTE,
+            std::memory_order_acq_rel, std::memory_order_acq_rel);
+        return true;
+      }
+      break;
   }
   return ret;
 }
