@@ -51,6 +51,8 @@ class Commitment {
                                   std::unique_ptr<Request> request);
   virtual int Process3PCCommitAckMsg(std::unique_ptr<Context> context,
                                      std::unique_ptr<Request> request);
+  virtual int ProcessStartPBFTMsg(std::unique_ptr<Context> context,
+                                  std::unique_ptr<Request> request);
 
   virtual int ProcessProposeMsg(std::unique_ptr<Context> context,
                                 std::unique_ptr<Request> request);

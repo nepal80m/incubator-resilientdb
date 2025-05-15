@@ -52,6 +52,8 @@ class MessageManager {
   absl::StatusOr<uint64_t> AssignNextSeq();
 
   int64_t GetCurrentPrimary() const;
+  int64_t GetCurrentShardPrimary(int64_t node_id);
+
   uint64_t GetMinExecutCandidateSeq();
   void SetNextSeq(uint64_t seq);
   int64_t GetNextSeq();

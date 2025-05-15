@@ -66,7 +66,9 @@ message Request {
         TYPE_3PC_COMMIT = 25;
         TYPE_3PC_COMMIT_ACK = 26;
 
-        NUM_OF_TYPE = 27; // the total number of types.
+        TYPE_START_PBFT = 27;
+
+        NUM_OF_TYPE = 28; // the total number of types.
                        // Used to create the collector.
     };
     int32 type = 1;

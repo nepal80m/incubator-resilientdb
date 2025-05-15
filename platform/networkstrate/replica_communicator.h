@@ -49,6 +49,8 @@ class ReplicaCommunicator {
                           const ReplicaInfo& replica_info);
 
   virtual void BroadCast(const google::protobuf::Message& message);
+  virtual void BroadCastWithinShard(const google::protobuf::Message& message,
+                                    int64_t node_id);
   virtual void SendMessage(const google::protobuf::Message& message,
                            int64_t node_id);
   virtual int SendBatchMessage(
@@ -75,8 +77,8 @@ class ReplicaCommunicator {
 
   void StartSingleInBackGround(const std::string& ip, int port);
 
-  int SendSingleMessage(const google::protobuf::Message& message, 
-      const ReplicaInfo& replica_info);
+  int SendSingleMessage(const google::protobuf::Message& message,
+                        const ReplicaInfo& replica_info);
 
  private:
   std::vector<ReplicaInfo> replicas_;
@@ -98,11 +100,10 @@ class ReplicaCommunicator {
   std::vector<std::thread> worker_threads_;
   std::vector<ReplicaInfo> clients_;
   std::mutex mutex_;
-  
 
-
-  std::map<std::pair<std::string, int>, 
-    std::unique_ptr<BatchQueue<std::unique_ptr<QueueItem>>>> single_bq_;
+  std::map<std::pair<std::string, int>,
+           std::unique_ptr<BatchQueue<std::unique_ptr<QueueItem>>>>
+      single_bq_;
   std::vector<std::thread> single_thread_;
   int tcp_batch_;
   std::mutex smutex_;

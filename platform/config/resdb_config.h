@@ -56,9 +56,14 @@ class ResDBConfig {
   const ReplicaInfo& GetSelfInfo() const;
   // The total number of replicas.
   size_t GetReplicaNum() const;
-  // The minimum number of messages that replicas have to receive after jumping
-  // to the next status.. 2f+1
+  size_t GetShardNum() const;
+  std::vector<int> GetInterShardReplicaIds(int64_t id);
+
+  // The minimum number of messages that replicas have to receive after
+  // jumping to the next status.. 2f+1
   int GetMinDataReceiveNum() const;
+  int GetMinShardDataReceiveNum() const;
+
   // The max malicious replicas to be tolerated (the number of f).
   size_t GetMaxMaliciousReplicaNum() const;
   // const int GetMaxMaliciousNum() const;
@@ -138,7 +143,6 @@ class ResDBConfig {
   uint32_t client_batch_wait_time_ms_ = 100;  // milliseconds, 0.1s
   uint64_t viewchange_commit_timeout_ms_ =
       60000;  // default 60s to change viewchange
-
 
   // This is the default settings.
   // change these parameters in the configuration.

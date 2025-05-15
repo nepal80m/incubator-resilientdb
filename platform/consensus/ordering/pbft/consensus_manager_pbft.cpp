@@ -244,6 +244,9 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
     case Request::TYPE_3PC_COMMIT_ACK:
       return commitment_->Process3PCCommitAckMsg(std::move(context),
                                                  std::move(request));
+    case Request::TYPE_START_PBFT:
+      return commitment_->ProcessStartPBFTMsg(std::move(context),
+                                              std::move(request));
 
     case Request::TYPE_PRE_PREPARE:
       return commitment_->ProcessProposeMsg(std::move(context),

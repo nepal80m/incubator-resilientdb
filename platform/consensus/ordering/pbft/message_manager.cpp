@@ -79,6 +79,32 @@ std::unique_ptr<BatchUserResponse> MessageManager::GetResponseMsg() {
 int64_t MessageManager::GetCurrentPrimary() const {
   return system_info_->GetPrimaryId();
 }
+int64_t MessageManager::GetCurrentShardPrimary(int64_t node_id) {
+  switch (node_id) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+      return 1;
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+      return 5;
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+      return 9;
+    case 13:
+    case 14:
+    case 15:
+    case 16:
+      return 13;
+    default:
+      return 1;
+  }
+}
 
 uint64_t MessageManager ::GetCurrentView() const {
   return system_info_->GetCurrentView();
@@ -157,8 +183,9 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_PREPARE:
+      LOG(INFO) << "reached may TYPE_PREPARE with count: " << received_count;
       if (*status == TransactionStatue::READY_PREPARE &&
-          config_.GetMinDataReceiveNum() <= received_count) {
+          config_.GetMinShardDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_PREPARE;
         return status->compare_exchange_strong(
             old_status, TransactionStatue::READY_COMMIT,
@@ -167,7 +194,7 @@ bool MessageManager::MayConsensusChangeStatus(
       break;
     case Request::TYPE_COMMIT:
       if (*status == TransactionStatue::READY_COMMIT &&
-          config_.GetMinDataReceiveNum() <= received_count) {
+          config_.GetMinShardDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_COMMIT;
         return status->compare_exchange_strong(
             old_status, TransactionStatue::READY_EXECUTE,
@@ -175,27 +202,36 @@ bool MessageManager::MayConsensusChangeStatus(
         return true;
       }
       break;
+    case Request::TYPE_3PC_VOTE_REQUEST:
+      // if (*status == TransactionStatue::None) {
+      // TransactionStatue old_status = TransactionStatue::None;
+      // return status->compare_exchange_strong(
+      //     old_status, TransactionStatue::READY_PREPARE,
+      //     std::memory_order_acq_rel, std::memory_order_acq_rel);
+      // }
+      return true;
+      break;
     case Request::TYPE_3PC_VOTE_YES:
-      if (*status == TransactionStatue::READY_PREPARE &&
-          config_.GetReplicaNum() <= received_count) {
+      if (*status == TransactionStatue::None &&
+          config_.GetShardNum() <= received_count) {
         return true;
       }
       break;
     case Request::TYPE_3PC_PRE_COMMIT_ACK:
-      if (*status == TransactionStatue::READY_PREPARE &&
-          config_.GetReplicaNum() <= received_count) {
+      if (*status == TransactionStatue::None &&
+          config_.GetShardNum() <= received_count) {
         return true;
       }
       break;
-    case Request::TYPE_3PC_COMMIT:
-      if (*status == TransactionStatue::READY_PREPARE) {
-        TransactionStatue old_status = TransactionStatue::READY_PREPARE;
-        return status->compare_exchange_strong(
-            old_status, TransactionStatue::READY_EXECUTE,
-            std::memory_order_acq_rel, std::memory_order_acq_rel);
-        return true;
-      }
-      break;
+      // case Request::TYPE_3PC_COMMIT:
+      //   if (*status == TransactionStatue::None) {
+      //     TransactionStatue old_status = TransactionStatue::READY_PREPARE;
+      //     return status->compare_exchange_strong(
+      //         old_status, TransactionStatue::READY_EXECUTE,
+      //         std::memory_order_acq_rel, std::memory_order_acq_rel);
+      //     return true;
+      //   }
+      //   break;
   }
   return ret;
 }
