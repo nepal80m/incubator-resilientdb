@@ -45,7 +45,7 @@ Commitment::Commitment(const ResDBConfig& config,
       config_.GetSelfInfo().id(), config_.GetSelfInfo().ip(),
       config_.GetSelfInfo().port(), config_.GetConfigData().enable_resview(),
       config_.GetConfigData().enable_faulty_switch());
-  global_stats_->SetPrimaryId(message_manager_->GetCurrentPrimary());
+  global_stats_->SetPrimaryId(current_leader_index_);
 }
 
 Commitment::~Commitment() {
@@ -58,6 +58,16 @@ Commitment::~Commitment() {
 void Commitment::SetPreVerifyFunc(
     std::function<bool(const Request& request)> func) {
   pre_verify_func_ = func;
+}
+
+size_t Commitment::GetNextLeaderIndex() {
+  size_t replica_count = config_.GetReplicaInfos().size();
+  if (replica_count == 0) {
+    return 0;
+  }
+
+  current_leader_index_ = (current_leader_index_ + 4) % replica_count;
+  return current_leader_index_;
 }
 
 void Commitment::SetNeedCommitQC(bool need_qc) { need_qc_ = need_qc; }
@@ -81,16 +91,16 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     return -2;
   }
   // Check if this node is the primary replica.
-  if (config_.GetSelfInfo().id() != message_manager_->GetCurrentPrimary()) {
+  if (config_.GetSelfInfo().id() != current_leader_index_) {
     // LOG(ERROR) << "current node is not primary. primary:"
-    //            << message_manager_->GetCurrentPrimary()
+    //            << current_leader_index_
     //            << " seq:" << user_request->seq()
     //            << " hash:" << user_request->hash();
     LOG(INFO) << "NOT PRIMARY, Primary is "
-              << message_manager_->GetCurrentPrimary();
+              << current_leader_index_;
     // Forward request to the primary.
     replica_communicator_->SendMessage(*user_request,
-                                       message_manager_->GetCurrentPrimary());
+                                       current_leader_index_);
     {
       std::lock_guard<std::mutex> lk(rc_mutex_);
       request_complained_.push(
@@ -100,7 +110,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     return -3;
   }
   LOG(INFO) << "Starting 3pc" << config_.GetSelfInfo().id()
-            << " primary id:" << message_manager_->GetCurrentPrimary();
+            << " primary id:" << current_leader_index_;
   /*
   if(SignatureVerifier::CalculateHash(user_request->data()) !=
   user_request->hash()){ LOG(ERROR) << "the hash and data of the user request
@@ -152,7 +162,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
 
   global_stats_->RecordStateTime("request");
   LOG(INFO) << "HERE: me id:" << config_.GetSelfInfo().id()
-            << " primary id:" << message_manager_->GetCurrentPrimary();
+            << " primary id:" << current_leader_index_;
 
   // Convert user request to pre-prepare message
   // New: Convert user request to vote request message
@@ -197,7 +207,7 @@ int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
   // if (ret == CollectorResultCode::STATE_CHANGED) {
   // replica_communicator_->BroadCast(*vote_yes_request);
   replica_communicator_->SendMessage(*vote_yes_request,
-                                     message_manager_->GetCurrentPrimary());
+                                     current_leader_index_);
   // } else {
   //   LOG(ERROR) << "consensus not reached inside Process3PCVoteRequestMsg";
   // }
@@ -233,7 +243,7 @@ int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
   // precommit_ack_request->clear_data();
 
   replica_communicator_->SendMessage(*precommit_ack_request,
-                                     message_manager_->GetCurrentPrimary());
+                                     current_leader_index_);
 
   return 0;
 }
@@ -270,8 +280,10 @@ int Commitment::Process3PCCommitMsg(std::unique_ptr<Context> context,
       Request::TYPE_3PC_COMMIT_ACK, *request, config_.GetSelfInfo().id());
   // commit_ack_request->clear_data();
 
+  size_t next_leader = GetNextLeaderIndex();
+  LOG(INFO) << "NEXT LEADER WILL BE: " << next_leader;
   replica_communicator_->SendMessage(*commit_ack_request,
-                                     message_manager_->GetCurrentPrimary());
+                                     current_leader_index_);
   return 0;
 }
 
@@ -334,7 +346,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
                                              std::move(request));
   }
   // Verify the request is from the primary.
-  // if (request->sender_id() != message_manager_->GetCurrentPrimary()) {
+  // if (request->sender_id() != current_leader_index_) {
   if (request->sender_id() !=
       message_manager_->GetCurrentShardPrimary(config_.GetSelfInfo().id())) {
     LOG(ERROR) << "the request is not from primary. sender:"

@@ -66,6 +66,8 @@ class PerformanceManager {
           call_back);
   void SendResponseToClient(const BatchUserResponse& batch_response);
 
+  size_t GetNextReplicaIndex();
+
   struct QueueItem {
     std::unique_ptr<Context> context;
     std::unique_ptr<Request> user_request;
@@ -113,6 +115,7 @@ class PerformanceManager {
   sem_t request_sent_signal_;
   uint64_t highest_seq_;
   uint64_t highest_seq_primary_id_;
+  size_t current_replica_index_ = 0;
 };
 
 }  // namespace resdb

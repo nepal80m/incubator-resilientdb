@@ -73,6 +73,7 @@ class Commitment {
 
  protected:
   virtual int PostProcessExecutedMsg();
+  size_t GetNextLeaderIndex();
 
  protected:
   ResDBConfig config_;
@@ -89,6 +90,7 @@ class Commitment {
 
   std::mutex mutex_;
   std::unique_ptr<DuplicateManager> duplicate_manager_;
+  size_t current_leader_index_ = 1;
 };
 
 }  // namespace resdb

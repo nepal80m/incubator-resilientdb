@@ -290,6 +290,20 @@ int PerformanceManager::BatchProposeMsg() {
   return 0;
 }
 
+size_t PerformanceManager::GetNextReplicaIndex() {
+  size_t replica_count = config_.GetReplicaInfos().size();
+  if (replica_count == 0) {
+    return 0;
+  }
+  else if (current_replica_index_ == 0){
+    current_replica_index_ = 1;
+    return current_replica_index_;
+  }
+
+  current_replica_index_ = (current_replica_index_ + 4) % replica_count;
+  return current_replica_index_;
+}
+
 int PerformanceManager::DoBatch(
     const std::vector<std::unique_ptr<QueueItem>>& batch_req) {
   auto new_request =
@@ -324,7 +338,8 @@ int PerformanceManager::DoBatch(
   new_request->set_hash(SignatureVerifier::CalculateHash(new_request->data()));
   new_request->set_proxy_id(config_.GetSelfInfo().id());
 
-  replica_communicator_->SendMessage(*new_request, GetPrimary());
+  size_t next_leader = GetNextReplicaIndex();
+  replica_communicator_->SendMessage(*new_request, next_leader);
   global_stats_->BroadCastMsg();
   send_num_[GetPrimary()]++;
   if (total_num_++ == 1000000) {
