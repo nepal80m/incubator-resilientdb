@@ -244,18 +244,18 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
     case Request::TYPE_3PC_COMMIT_ACK:
       return commitment_->Process3PCCommitAckMsg(std::move(context),
                                                  std::move(request));
-    case Request::TYPE_START_PBFT:
-      return commitment_->ProcessStartPBFTMsg(std::move(context),
+    case Request::TYPE_START_POE:
+      return commitment_->ProcessStartPoEMsg(std::move(context),
                                               std::move(request));
 
     case Request::TYPE_PRE_PREPARE:
-      return commitment_->ProcessProposeMsg(std::move(context),
+      return commitment_->ProcessProposePoEMsg(std::move(context),
                                             std::move(request));
     case Request::TYPE_PREPARE:
       return commitment_->ProcessPrepareMsg(std::move(context),
                                             std::move(request));
     case Request::TYPE_COMMIT:
-      return commitment_->ProcessCommitMsg(std::move(context),
+      return commitment_->ProcessCommitPoEMsg(std::move(context),
                                            std::move(request));
     case Request::TYPE_CHECKPOINT:
       return checkpoint_manager_->ProcessCheckPoint(std::move(context),

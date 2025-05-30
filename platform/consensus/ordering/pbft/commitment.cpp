@@ -279,21 +279,21 @@ int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,
                                        std::unique_ptr<Request> request) {
   LOG(INFO) << "Inside Process3PCCommitAckMsg";
 
-  std::unique_ptr<Request> start_pbft_request = resdb::NewRequest(
-      Request::TYPE_START_PBFT, *request, config_.GetSelfInfo().id());
+  std::unique_ptr<Request> start_poe_request = resdb::NewRequest(
+      Request::TYPE_START_POE, *request, config_.GetSelfInfo().id());
   // pre_prepare_request->clear_data();
 
-  replica_communicator_->SendMessage(*start_pbft_request, 1);
-  replica_communicator_->SendMessage(*start_pbft_request, 5);
-  replica_communicator_->SendMessage(*start_pbft_request, 9);
-  replica_communicator_->SendMessage(*start_pbft_request, 13);
+  replica_communicator_->SendMessage(*start_poe_request, 1);
+  replica_communicator_->SendMessage(*start_poe_request, 5);
+  replica_communicator_->SendMessage(*start_poe_request, 9);
+  replica_communicator_->SendMessage(*start_poe_request, 13);
 
   // replica_communicator_->BroadCast(*start_pbft_request);
   return 0;
 }
-int Commitment::ProcessStartPBFTMsg(std::unique_ptr<Context> context,
+int Commitment::ProcessStartPoEMsg(std::unique_ptr<Context> context,
                                     std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessStartPBFTMsg";
+  LOG(INFO) << "Inside ProcessStartPoEMsg";
 
   std::unique_ptr<Request> pre_prepare_request = resdb::NewRequest(
       Request::TYPE_PRE_PREPARE, *request, config_.GetSelfInfo().id());
@@ -306,7 +306,7 @@ int Commitment::ProcessStartPBFTMsg(std::unique_ptr<Context> context,
 
 // Receive the pre-prepare message from the primary.
 // TODO check whether the sender is the primary.
-int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
+int Commitment::ProcessProposePoEMsg(std::unique_ptr<Context> context,
                                   std::unique_ptr<Request> request) {
   LOG(INFO) << "Inside ProcessProposeMsg";
 
@@ -382,9 +382,9 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
   global_stats_->RecordStateTime("pre-prepare");
 
   // Create a new prepare message based on received request.
-  std::unique_ptr<Request> prepare_request = resdb::NewRequest(
-      Request::TYPE_PREPARE, *request, config_.GetSelfInfo().id());
-  prepare_request->clear_data();
+  std::unique_ptr<Request> commit_request = resdb::NewRequest(
+    Request::TYPE_COMMIT, *request, config_.GetSelfInfo().id());
+  commit_request->mutable_data_signature()->Clear();
 
   // Add request to message_manager.
   // If it has received enough same requests(2f+1), broadcast the prepare
@@ -396,7 +396,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
   CollectorResultCode ret =
       message_manager_->AddConsensusMsg(context->signature, std::move(request));
   if (ret == CollectorResultCode::STATE_CHANGED) {
-    replica_communicator_->BroadCast(*prepare_request);
+    replica_communicator_->BroadCast(*commit_request);
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
   // return 0;
@@ -452,9 +452,9 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
 }
 
 // If receive 2f+1 commit message, commit the request.
-int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
+int Commitment::ProcessCommitPoEMsg(std::unique_ptr<Context> context,
                                  std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessCommitMsg";
+  LOG(INFO) << "Inside ProcessCommitPoEMsg";
 
   if (context == nullptr || context->signature.signature().empty()) {
     LOG(ERROR) << "user request doesn't contain signature, reject"
@@ -475,6 +475,7 @@ int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
     // LOG(ERROR)<<request->data().size();
     // global_stats_->GetTransactionDetails(request->data());
     global_stats_->RecordStateTime("commit");
+    LOG(INFO) << "INSIDE COMMIT CONSENSUS";
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
