@@ -1,6 +1,8 @@
 deps/*/
 scripts/deploy/config/key.conf
 scripts/deploy/config_out/
+scripts/deploy/resilientdb_app/
+scripts/deploy/data/
 deploy/kv_server/output/
 .idea/
 .vscode/
