@@ -178,7 +178,7 @@ bool MessageManager::MayConsensusChangeStatus(
       if (*status == TransactionStatue::None) {
         TransactionStatue old_status = TransactionStatue::None;
         return status->compare_exchange_strong(
-            old_status, TransactionStatue::READY_PREPARE,
+            old_status, TransactionStatue::READY_COMMIT,
             std::memory_order_acq_rel, std::memory_order_acq_rel);
       }
       break;
