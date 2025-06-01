@@ -121,6 +121,7 @@ int ResDBConfig::GetMinDataReceiveNum() const {
   int f = (replicas_.size() - 1) / 3;
   return std::max(2 * f + 1, 1);
 }
+
 int ResDBConfig::GetMinShardDataReceiveNum() const {
   int f = ((replicas_.size() / 4) - 1) / 3;
   return std::max(2 * f + 1, 1);
@@ -128,7 +129,7 @@ int ResDBConfig::GetMinShardDataReceiveNum() const {
 
 int ResDBConfig::GetMinClientReceiveNum() const {
   int f = (replicas_.size() - 1) / 3;
-  return std::max(f + 1, 1);
+  return std::max(2 * f + 1, 1);  // changed from f+1 to 2f+1 for poe
 }
 
 int ResDBConfig::GetMinCheckpointReceiveNum() const {

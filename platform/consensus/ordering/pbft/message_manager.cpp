@@ -187,7 +187,7 @@ bool MessageManager::MayConsensusChangeStatus(
           config_.GetMinShardDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_PREPARE;
         return status->compare_exchange_strong(
-            old_status, TransactionStatue::READY_COMMIT,
+            old_status, TransactionStatue::READY_EXECUTE,
             std::memory_order_acq_rel, std::memory_order_acq_rel);
       }
       break;

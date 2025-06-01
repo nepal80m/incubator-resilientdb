@@ -285,22 +285,20 @@ int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,
                                        std::unique_ptr<Request> request) {
   // LOG(INFO) << "Inside Process3PCCommitAckMsg";
 
-  std::unique_ptr<Request> start_pbft_request = resdb::NewRequest(
-      Request::TYPE_START_PBFT, *request, config_.GetSelfInfo().id());
-  // pre_prepare_request->clear_data();
+  std::unique_ptr<Request> start_poe_request = resdb::NewRequest(
+      Request::TYPE_START_POE, *request, config_.GetSelfInfo().id());
 
-  replica_communicator_->SendMessage(*start_pbft_request, 1);
-  replica_communicator_->SendMessage(*start_pbft_request, 5);
-  replica_communicator_->SendMessage(*start_pbft_request, 9);
-  replica_communicator_->SendMessage(*start_pbft_request, 13);
+  replica_communicator_->SendMessage(*start_poe_request, 1);
+  replica_communicator_->SendMessage(*start_poe_request, 5);
+  replica_communicator_->SendMessage(*start_poe_request, 9);
+  replica_communicator_->SendMessage(*start_poe_request, 13);
 
-  // replica_communicator_->BroadCast(*start_pbft_request);
   return 0;
 }
 
-int Commitment::ProcessStartPBFTMsg(std::unique_ptr<Context> context,
-                                    std::unique_ptr<Request> request) {
-  // LOG(INFO) << "Inside ProcessStartPBFTMsg";
+int Commitment::ProcessStartPOEMsg(std::unique_ptr<Context> context,
+                                   std::unique_ptr<Request> request) {
+  // LOG(INFO) << "Inside ProcessStartPOEMsg";
   LOG(INFO) << "Completed 3PC with Primary " << request->primary_id();
 
   std::unique_ptr<Request> pre_prepare_request = resdb::NewRequest(
@@ -449,8 +447,8 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
       //           << commit_request->data_signature().DebugString();
     }
     global_stats_->RecordStateTime("prepare");
-    replica_communicator_->BroadCastWithinShard(*commit_request,
-                                                config_.GetSelfInfo().id());
+    // replica_communicator_->BroadCastWithinShard(*commit_request,
+    // config_.GetSelfInfo().id());
 
     // replica_communicator_->BroadCast(*commit_request);
   } else {
