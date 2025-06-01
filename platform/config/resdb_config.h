@@ -57,7 +57,6 @@ class ResDBConfig {
   // The total number of replicas.
   size_t GetReplicaNum() const;
   size_t GetShardNum() const;
-  std::vector<int> GetInterShardReplicaIds(int64_t id);
 
   // The minimum number of messages that replicas have to receive after
   // jumping to the next status.. 2f+1

@@ -114,34 +114,6 @@ const std::vector<ReplicaInfo>& ResDBConfig::GetReplicaInfos() const {
 
 const ReplicaInfo& ResDBConfig::GetSelfInfo() const { return self_info_; }
 
-std::vector<int> ResDBConfig::GetInterShardReplicaIds(int64_t id) {
-  std::vector<int64_t> interShardReplicaIds;
-  switch (id) {
-    case 1:
-    case 5:
-    case 9:
-    case 13:
-      return {id, id + 1, id + 2, id + 3};
-    case 2:
-    case 6:
-    case 10:
-    case 14:
-      return {id - 1, id, id + 1, id + 2};
-    case 3:
-    case 7:
-    case 11:
-    case 15:
-      return {id - 2, id - 1, id, id + 1};
-    case 4:
-    case 8:
-    case 12:
-    case 16:
-      return {id - 3, id - 2, id - 1, id};
-    default:
-      return {id};
-  }
-}
-
 size_t ResDBConfig::GetReplicaNum() const { return replicas_.size(); }
 size_t ResDBConfig::GetShardNum() const { return replicas_.size() / 4; }
 
