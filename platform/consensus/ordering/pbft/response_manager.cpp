@@ -307,6 +307,7 @@ int ResponseManager::DoBatch(
     req->set_id(i);
     context_list.push_back(std::move(batch_req[i]->context));
   }
+  LOG(INFO) << "Batching in ResponseManager";
 
   if (!config_.IsPerformanceRunning()) {
     LOG(ERROR) << "add context list:" << new_request->seq()

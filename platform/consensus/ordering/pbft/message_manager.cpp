@@ -183,7 +183,6 @@ bool MessageManager::MayConsensusChangeStatus(
       }
       break;
     case Request::TYPE_PREPARE:
-      LOG(INFO) << "reached may TYPE_PREPARE with count: " << received_count;
       if (*status == TransactionStatue::READY_PREPARE &&
           config_.GetMinShardDataReceiveNum() <= received_count) {
         TransactionStatue old_status = TransactionStatue::READY_PREPARE;

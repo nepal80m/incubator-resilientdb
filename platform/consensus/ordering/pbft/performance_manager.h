@@ -83,6 +83,7 @@ class PerformanceManager {
   void ResponseTimer(std::string hash);
   void MonitoringClientTimeOut();
   std::unique_ptr<Request> GetTimeOutRequest(std::string hash);
+  void RotatePrimary();
 
  private:
   ResDBConfig config_;
@@ -104,6 +105,8 @@ class PerformanceManager {
   std::promise<bool> eval_ready_promise_;
   std::atomic<bool> eval_started_;
   std::atomic<int> fail_num_;
+
+  // std::atomic<uint32_t> rotating_index_;
 
   std::thread checking_timeout_thread_;
   std::map<std::string, std::unique_ptr<Request>> waiting_response_batches_;

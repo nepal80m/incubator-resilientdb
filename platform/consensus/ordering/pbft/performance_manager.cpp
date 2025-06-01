@@ -76,6 +76,7 @@ PerformanceManager::PerformanceManager(
   }
   total_num_ = 0;
   timeout_length_ = 100000000;  // 10s
+  // rotating_index_ = 1;
 }
 
 PerformanceManager::~PerformanceManager() {
@@ -92,6 +93,27 @@ PerformanceManager::~PerformanceManager() {
 
 // use system info
 int PerformanceManager::GetPrimary() { return system_info_->GetPrimaryId(); }
+
+// void PerformanceManager::RotatePrimary() {
+//   const std::vector<ReplicaInfo>& replicas = config_.GetReplicaInfos();
+//   uint32_t id =
+//       config_.GetReplicaInfos()[(rotating_index_ + 1) %
+//       replicas.size()].id();
+//   // uint32_t id = ((rotating_index_ + 1) % replicas.size());
+//   system_info_->SetPrimary(id);
+//   global_stats_->ChangePrimary(id);
+//   rotating_index_++;
+// }
+
+void PerformanceManager::RotatePrimary() {
+  const std::vector<ReplicaInfo>& replicas = config_.GetReplicaInfos();
+  uint32_t id = config_
+                    .GetReplicaInfos()[(system_info_->GetPrimaryId() + 3) %
+                                       replicas.size()]
+                    .id();
+  system_info_->SetPrimary(id);
+  global_stats_->ChangePrimary(id);
+}
 
 std::unique_ptr<Request> PerformanceManager::GenerateUserRequest() {
   std::unique_ptr<Request> request = std::make_unique<Request>();
@@ -308,7 +330,6 @@ int PerformanceManager::DoBatch(
     }
     req->set_id(i);
   }
-
   batch_request.set_createtime(GetCurrentTime());
   batch_request.set_local_id(local_id_++);
   batch_request.SerializeToString(new_request->mutable_data());
@@ -336,6 +357,11 @@ int PerformanceManager::DoBatch(
   }
   global_stats_->IncClientCall();
   AddWaitingResponseRequest(std::move(new_request));
+
+  LOG(INFO) << "Batching in PerformanceManager";
+  LOG(INFO) << "old primary id:" << GetPrimary();
+  RotatePrimary();
+  LOG(INFO) << "new primary id:" << GetPrimary();
   return 0;
 }
 

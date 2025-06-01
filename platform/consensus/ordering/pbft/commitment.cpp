@@ -89,18 +89,17 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
     LOG(INFO) << "NOT PRIMARY, Primary is "
               << message_manager_->GetCurrentPrimary();
     // Forward request to the primary.
-    replica_communicator_->SendMessage(*user_request,
-                                       message_manager_->GetCurrentPrimary());
-    {
-      std::lock_guard<std::mutex> lk(rc_mutex_);
-      request_complained_.push(
-          std::make_pair(std::move(context), std::move(user_request)));
-    }
-
-    return -3;
+    // replica_communicator_->SendMessage(*user_request,
+    //  message_manager_->GetCurrentPrimary());
+    // {
+    //   std::lock_guard<std::mutex> lk(rc_mutex_);
+    //   request_complained_.push(
+    //       std::make_pair(std::move(context), std::move(user_request)));
+    // }
+    // return -3;
   }
-  LOG(INFO) << "Starting 3pc" << config_.GetSelfInfo().id()
-            << " primary id:" << message_manager_->GetCurrentPrimary();
+  // LOG(INFO) << "Starting 3pc" << config_.GetSelfInfo().id()
+  // << " primary id:" << message_manager_->GetCurrentPrimary();
   /*
   if(SignatureVerifier::CalculateHash(user_request->data()) !=
   user_request->hash()){ LOG(ERROR) << "the hash and data of the user request
@@ -151,8 +150,6 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
   }
 
   global_stats_->RecordStateTime("request");
-  LOG(INFO) << "HERE: me id:" << config_.GetSelfInfo().id()
-            << " primary id:" << message_manager_->GetCurrentPrimary();
 
   // Convert user request to pre-prepare message
   // New: Convert user request to vote request message
@@ -178,7 +175,7 @@ int Commitment::ProcessNewRequest(std::unique_ptr<Context> context,
 
 int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
                                          std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside Process3PCVoteRequestMsg";
+  // LOG(INFO) << "Inside Process3PCVoteRequestMsg";
 
   // Create a new prepare message based on received request.
   std::unique_ptr<Request> vote_yes_request = resdb::NewRequest(
@@ -196,8 +193,11 @@ int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
   // message_manager_->AddConsensusMsg(context->signature, std::move(request));
   // if (ret == CollectorResultCode::STATE_CHANGED) {
   // replica_communicator_->BroadCast(*vote_yes_request);
-  replica_communicator_->SendMessage(*vote_yes_request,
-                                     message_manager_->GetCurrentPrimary());
+
+  // replica_communicator_->SendMessage(*vote_yes_request,
+  //                                    message_manager_->GetCurrentPrimary());
+  replica_communicator_->SendMessage(*vote_yes_request, request->primary_id());
+
   // } else {
   //   LOG(ERROR) << "consensus not reached inside Process3PCVoteRequestMsg";
   // }
@@ -207,7 +207,7 @@ int Commitment::Process3PCVoteRequestMsg(std::unique_ptr<Context> context,
 
 int Commitment::Process3PCVoteYesMsg(std::unique_ptr<Context> context,
                                      std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside Process3PCVoteYesMsg";
+  // LOG(INFO) << "Inside Process3PCVoteYesMsg";
   std::unique_ptr<Request> pre_commit_request = resdb::NewRequest(
       Request::TYPE_3PC_PRE_COMMIT, *request, config_.GetSelfInfo().id());
   // pre_commit_request->clear_data();
@@ -221,7 +221,7 @@ int Commitment::Process3PCVoteYesMsg(std::unique_ptr<Context> context,
     replica_communicator_->SendMessage(*pre_commit_request, 9);
     replica_communicator_->SendMessage(*pre_commit_request, 13);
   } else {
-    LOG(ERROR) << "consensus not reached inside Process3PCVoteYesMsg";
+    // LOG(ERROR) << "consensus not reached inside Process3PCVoteYesMsg";
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
@@ -232,15 +232,17 @@ int Commitment::Process3PCPreCommitMsg(std::unique_ptr<Context> context,
       Request::TYPE_3PC_PRE_COMMIT_ACK, *request, config_.GetSelfInfo().id());
   // precommit_ack_request->clear_data();
 
+  // replica_communicator_->SendMessage(*precommit_ack_request,
+  //  message_manager_->GetCurrentPrimary());
   replica_communicator_->SendMessage(*precommit_ack_request,
-                                     message_manager_->GetCurrentPrimary());
+                                     request->primary_id());
 
   return 0;
 }
 
 int Commitment::Process3PCPreCommitAckMsg(std::unique_ptr<Context> context,
                                           std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside Process3PCPreCommitAckMsg";
+  // LOG(INFO) << "Inside Process3PCPreCommitAckMsg";
   std::unique_ptr<Request> commit_request = resdb::NewRequest(
       Request::TYPE_3PC_COMMIT, *request, config_.GetSelfInfo().id());
   // commit_request->clear_data();
@@ -255,7 +257,7 @@ int Commitment::Process3PCPreCommitAckMsg(std::unique_ptr<Context> context,
     replica_communicator_->SendMessage(*commit_request, 9);
     replica_communicator_->SendMessage(*commit_request, 13);
   } else {
-    LOG(ERROR) << "consensus not reached inside Process3PCPreCommitAckMsg";
+    // LOG(ERROR) << "consensus not reached inside Process3PCPreCommitAckMsg";
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
@@ -270,14 +272,18 @@ int Commitment::Process3PCCommitMsg(std::unique_ptr<Context> context,
       Request::TYPE_3PC_COMMIT_ACK, *request, config_.GetSelfInfo().id());
   // commit_ack_request->clear_data();
 
+  // replica_communicator_->SendMessage(*commit_ack_request,
+  //  message_manager_->GetCurrentPrimary());
+
   replica_communicator_->SendMessage(*commit_ack_request,
-                                     message_manager_->GetCurrentPrimary());
+                                     request->primary_id());
+
   return 0;
 }
 
 int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,
                                        std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside Process3PCCommitAckMsg";
+  // LOG(INFO) << "Inside Process3PCCommitAckMsg";
 
   std::unique_ptr<Request> start_pbft_request = resdb::NewRequest(
       Request::TYPE_START_PBFT, *request, config_.GetSelfInfo().id());
@@ -291,9 +297,11 @@ int Commitment::Process3PCCommitAckMsg(std::unique_ptr<Context> context,
   // replica_communicator_->BroadCast(*start_pbft_request);
   return 0;
 }
+
 int Commitment::ProcessStartPBFTMsg(std::unique_ptr<Context> context,
                                     std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessStartPBFTMsg";
+  // LOG(INFO) << "Inside ProcessStartPBFTMsg";
+  LOG(INFO) << "Completed 3PC with Primary " << request->primary_id();
 
   std::unique_ptr<Request> pre_prepare_request = resdb::NewRequest(
       Request::TYPE_PRE_PREPARE, *request, config_.GetSelfInfo().id());
@@ -308,7 +316,7 @@ int Commitment::ProcessStartPBFTMsg(std::unique_ptr<Context> context,
 // TODO check whether the sender is the primary.
 int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
                                   std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessProposeMsg";
+  // LOG(INFO) << "Inside ProcessProposeMsg";
 
   // Check if node is in faulty state or if the request lacks proper
   // context/signature.
@@ -405,7 +413,7 @@ int Commitment::ProcessProposeMsg(std::unique_ptr<Context> context,
 // If receive 2f+1 prepare message, broadcast a commit message.
 int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
                                   std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessPrepareMsg";
+  // LOG(INFO) << "Inside ProcessPrepareMsg";
 
   if (context == nullptr || context->signature.signature().empty()) {
     LOG(ERROR) << "user request doesn't contain signature, reject";
@@ -446,7 +454,7 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
 
     // replica_communicator_->BroadCast(*commit_request);
   } else {
-    LOG(ERROR) << "consensus not reached inside ProcessPrepareMsg";
+    // LOG(ERROR) << "consensus not reached inside ProcessPrepareMsg";
   }
   return ret == CollectorResultCode::INVALID ? -2 : 0;
 }
@@ -454,7 +462,7 @@ int Commitment::ProcessPrepareMsg(std::unique_ptr<Context> context,
 // If receive 2f+1 commit message, commit the request.
 int Commitment::ProcessCommitMsg(std::unique_ptr<Context> context,
                                  std::unique_ptr<Request> request) {
-  LOG(INFO) << "Inside ProcessCommitMsg";
+  // LOG(INFO) << "Inside ProcessCommitMsg";
 
   if (context == nullptr || context->signature.signature().empty()) {
     LOG(ERROR) << "user request doesn't contain signature, reject"
