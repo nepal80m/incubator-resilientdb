@@ -60,33 +60,16 @@ absl::StatusOr<std::string> TransactionConstructor::GetResponseData(
   return absl::InvalidArgumentError("data not enough");
 }
 
-size_t TransactionConstructor::GetNextReplicaIndex() {
-  size_t replica_count = config_.GetReplicaInfos().size();
-  if (replica_count == 0) {
-    return 0;
-  }
-
-  size_t current_index = current_replica_index_;
-  current_replica_index_ = (current_replica_index_ + 1) % replica_count;
-  return current_replica_index_;
-}
-
 int TransactionConstructor::SendRequest(
     const google::protobuf::Message& message, Request::Type type) {
-  // Use round-robin to select the next replica
-  size_t replica_index = GetNextReplicaIndex();
-  NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[replica_index]);
-  // NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[0]);
+  NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[0]);
   return NetChannel::SendRequest(message, type, false);
 }
 
 int TransactionConstructor::SendRequest(
     const google::protobuf::Message& message,
     google::protobuf::Message* response, Request::Type type) {
-  // Use round robin to select the next replica
-  size_t replica_index = GetNextReplicaIndex();
-  NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[replica_index]);
-  // NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[0]);
+  NetChannel::SetDestReplicaInfo(config_.GetReplicaInfos()[0]);
   int ret = NetChannel::SendRequest(message, type, true);
   if (ret == 0) {
     std::string resp_str;
