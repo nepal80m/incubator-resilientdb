@@ -42,13 +42,10 @@ class TransactionConstructor : public NetChannel {
 
  private:
   absl::StatusOr<std::string> GetResponseData(const Response& response);
-  // Get next replica index in a round-robin fashion
-  size_t GetNextReplicaIndex();
 
  private:
   ResDBConfig config_;
-  int64_t timeout_ms_;                // microsecond for timeout.
-  size_t current_replica_index_ = 0;  // Track the current replica index
+  int64_t timeout_ms_;  // microsecond for timeout.
 };
 
 }  // namespace resdb
